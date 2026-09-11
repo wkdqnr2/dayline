@@ -1,0 +1,9 @@
+{
+  "name":"Dayline — Timeline Memo",
+  "short_name":"Dayline",
+  "start_url":"./index.html",
+  "display":"standalone",
+  "background_color":"#f4f1e9",
+  "theme_color":"#f4f1e9",
+  "description":"시간 위에 생각을 놓는 타임라인 메모 앱"
+}
