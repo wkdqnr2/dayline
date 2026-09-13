@@ -1,104 +1,86 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f7f5ef" />
-  <title>Dayline — 시간 위에 생각을 놓다</title>
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f6f2e8">
+  <title>Dayline</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app-shell">
+  <div class="app">
     <header class="topbar">
-      <div class="brand-wrap">
-        <div class="brand-mark">D</div>
-        <div>
-          <div class="brand">Dayline</div>
-          <div class="tagline">시간 위에 생각을 놓다</div>
-        </div>
-      </div>
+      <div class="brand"><span class="logo">D</span><div><b>Dayline</b><small>시간 위에 생각을 놓다</small></div></div>
       <div class="top-actions">
-        <button class="ghost" id="todayBtn">오늘</button>
-        <button class="primary" id="newBtn">＋ 새 기록</button>
+        <button class="btn ghost" id="calendarBtn">캘린더</button>
+        <button class="btn icon" id="settingsBtn" aria-label="설정">⚙</button>
+        <button class="btn primary" id="newBtn">＋ 새 기록</button>
       </div>
     </header>
 
-    <section class="timeline-section">
-      <div class="timeline-meta">
-        <div>
-          <div class="eyebrow">TIMELINE</div>
-          <h1 id="monthTitle"></h1>
-        </div>
-        <div class="timeline-nav">
-          <button class="icon-btn" id="prevWeek" aria-label="이전">←</button>
-          <button class="icon-btn" id="nextWeek" aria-label="다음">→</button>
-        </div>
+    <section class="timeline-wrap">
+      <div class="section-head">
+        <div><span class="eyebrow">TIMELINE</span><h1 id="monthTitle"></h1></div>
+        <div class="nav"><button class="btn icon" id="prevWeek">←</button><button class="btn icon" id="nextWeek">→</button></div>
       </div>
-      <div class="timeline-wrap" id="timelineWrap">
-        <div class="timeline" id="timeline"></div>
-      </div>
+      <div class="timeline-scroll"><div id="timeline" class="timeline"></div></div>
     </section>
 
-    <main class="workspace">
-      <section class="day-panel">
-        <div class="day-heading">
-          <div>
-            <div class="eyebrow" id="selectedWeekday"></div>
-            <h2 id="selectedDate"></h2>
-          </div>
-          <div class="count-pill" id="noteCount">0 records</div>
+    <main class="content">
+      <section class="day-card">
+        <div class="day-head">
+          <div><span class="eyebrow" id="selectedWeekday"></span><h2 id="selectedDate"></h2></div>
+          <div class="day-head-actions"><button class="btn ghost small" id="datePickBtn">날짜 선택</button><span class="pill" id="noteCount"></span></div>
         </div>
-        <div class="quick-capture">
+
+        <div class="composer">
           <textarea id="quickText" placeholder="생각나는 대로 적어보세요. 문장이 정리되어 있지 않아도 괜찮아요."></textarea>
-          <div class="quick-actions">
-            <div class="type-switch" id="typeSwitch">
-              <button class="type active" data-type="note">메모</button>
-              <button class="type" data-type="checklist">체크리스트</button>
-              <button class="type" data-type="mindmap">마인드맵</button>
+          <div class="composer-bottom">
+            <div class="type-tabs" id="typeTabs">
+              <button class="active" data-type="note">메모</button>
+              <button data-type="checklist">체크리스트</button>
+              <button data-type="mindmap">마인드맵</button>
             </div>
-            <div class="capture-buttons">
-              <button class="ghost" id="organizeBtn">✨ 자동 정리</button>
-              <button class="primary" id="saveBtn">기록하기</button>
-            </div>
+            <div class="composer-actions"><button class="btn ghost" id="organizeBtn">✨ 자동 정리</button><button class="btn primary" id="saveBtn">기록하기</button></div>
           </div>
         </div>
-        <div id="notesList" class="notes-list"></div>
+
+        <div id="notes" class="notes"></div>
       </section>
 
-      <aside class="insight-panel">
-        <div class="insight-card">
-          <div class="eyebrow">TODAY FLOW</div>
-          <div class="flow-score" id="flowScore">0%</div>
-          <div class="progress"><span id="flowBar"></span></div>
-          <p id="flowText">체크리스트를 만들면 오늘의 흐름을 보여드려요.</p>
-        </div>
-        <div class="insight-card">
-          <div class="eyebrow">AUTO ORGANIZE</div>
-          <h3>흩어진 생각을 구조로</h3>
-          <p>입력한 문장에서 할 일, 핵심 키워드, 제목 후보를 찾아 간단히 정리합니다.</p>
-          <div class="chips" id="keywordChips"><span>#dayline</span><span>#timeline</span></div>
-        </div>
-        <div class="insight-card tip">
-          <div class="tip-icon">↔</div>
-          <div><strong>시간을 탐색하세요</strong><p>상단 타임라인을 가로로 스크롤하면 과거와 미래 기록을 빠르게 볼 수 있어요.</p></div>
-        </div>
+      <aside class="side">
+        <div class="side-card"><span class="eyebrow">TODAY FLOW</span><div class="score" id="flowScore">0%</div><div class="progress"><i id="flowBar"></i></div><p id="flowText"></p></div>
+        <div class="side-card"><span class="eyebrow">AUTO ORGANIZE</span><h3>흩어진 생각을 구조로</h3><p>제목, 할 일, 키워드를 간단히 정리해요.</p><div class="chips" id="keywordChips"></div></div>
       </aside>
     </main>
   </div>
 
-  <template id="noteTemplate">
-    <article class="note-card">
-      <div class="card-top">
-        <div class="kind-badge"></div>
-        <button class="delete-btn" title="삭제">×</button>
-      </div>
-      <h3 class="note-title"></h3>
-      <div class="note-body"></div>
-      <div class="note-footer"><div class="chips note-tags"></div><time></time></div>
-    </article>
-  </template>
+  <div class="overlay" id="calendarModal" hidden>
+    <section class="modal calendar-modal">
+      <header><div><span class="eyebrow">CALENDAR</span><h2 id="calendarTitle"></h2></div><button class="btn icon close" data-close="calendarModal">×</button></header>
+      <div class="calendar-tools"><button class="btn ghost small" id="calPrev">이전 달</button><button class="btn ghost small" id="calToday">오늘</button><button class="btn ghost small" id="calNext">다음 달</button></div>
+      <div class="weekdays" id="weekdays"></div><div class="calendar" id="calendar"></div>
+    </section>
+  </div>
 
+  <div class="overlay" id="settingsModal" hidden>
+    <section class="modal settings-modal">
+      <header><div><span class="eyebrow">SETTINGS</span><h2>설정</h2></div><button class="btn icon close" data-close="settingsModal">×</button></header>
+      <button class="setting" id="replayTutorial"><span><b>튜토리얼 다시 보기</b><small>사용방법을 언제든 다시 확인해요</small></span><em>›</em></button>
+      <button class="setting" id="settingsCalendar"><span><b>캘린더 열기</b><small>달력에서 날짜를 바로 선택해요</small></span><em>›</em></button>
+      <button class="setting" id="goToday"><span><b>오늘로 이동</b><small>현재 날짜로 돌아가요</small></span><em>›</em></button>
+    </section>
+  </div>
+
+  <div class="overlay" id="tutorialModal" hidden>
+    <section class="modal tutorial-modal">
+      <header><div><span class="eyebrow">WELCOME TO DAYLINE</span><h2 id="tutorialTitle"></h2></div><button class="btn icon close" id="tutorialClose">×</button></header>
+      <p id="tutorialText" class="tutorial-text"></p><div id="tutorialVisual" class="tutorial-visual"></div><div id="tutorialDots" class="dots"></div>
+      <footer><button class="btn ghost" id="tutorialSkip">닫기</button><span></span><button class="btn ghost" id="tutorialPrev">이전</button><button class="btn primary" id="tutorialNext">다음</button></footer>
+    </section>
+  </div>
+
+  <template id="noteTemplate"><article class="note"><div class="note-top"><span class="badge"></span><button class="delete">×</button></div><h3></h3><div class="note-body"></div><div class="note-foot"><div class="chips note-tags"></div><time></time></div></article></template>
   <script src="app.js"></script>
 </body>
 </html>
