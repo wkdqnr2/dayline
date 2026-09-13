@@ -1,108 +1,22 @@
-const $ = s => document.querySelector(s);
-const storageKey = 'dayline.records.v1';
-let records = JSON.parse(localStorage.getItem(storageKey) || '[]');
-let selected = new Date();
-selected.setHours(0,0,0,0);
-let captureType = 'note';
-const fmtKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-const koDow = ['일요일','월요일','화요일','수요일','목요일','금요일','토요일'];
-const shortDow = ['일','월','화','수','목','금','토'];
-
-function save(){ localStorage.setItem(storageKey, JSON.stringify(records)); renderAll(); }
-function dateLabel(d){ return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`; }
-function monthLabel(d){ return `${d.getFullYear()}년 ${d.getMonth()+1}월`; }
-function esc(s=''){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
-function noteRecords(){ return records.filter(r=>r.date===fmtKey(selected)); }
-
-function renderTimeline(){
-  const timeline=$('#timeline'); timeline.innerHTML='';
-  const start=new Date(selected); start.setDate(start.getDate()-14);
-  const todayKey=fmtKey(new Date());
-  for(let i=0;i<29;i++){
-    const d=new Date(start); d.setDate(start.getDate()+i);
-    const key=fmtKey(d); const count=records.filter(r=>r.date===key).length;
-    const node=document.createElement('div');
-    node.className='day-node'+(key===fmtKey(selected)?' selected':'')+(key===todayKey?' today':'');
-    node.innerHTML=`<div class="dow">${shortDow[d.getDay()]}</div><div class="dot"></div><div class="num">${d.getDate()}</div><div class="mini">${count?count+' record'+(count>1?'s':''):''}</div>`;
-    node.onclick=()=>{selected=d;renderAll();setTimeout(()=>node.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'}),0)};
-    timeline.appendChild(node);
-  }
-  $('#monthTitle').textContent=monthLabel(selected);
-  setTimeout(()=>$('.day-node.selected')?.scrollIntoView({inline:'center',block:'nearest'}),0);
-}
-
-function renderNotes(){
-  $('#selectedWeekday').textContent=koDow[selected.getDay()].toUpperCase();
-  $('#selectedDate').textContent=dateLabel(selected);
-  const list=$('#notesList'); list.innerHTML=''; const items=noteRecords();
-  $('#noteCount').textContent=`${items.length} record${items.length===1?'':'s'}`;
-  if(!items.length){list.innerHTML='<div class="empty">이 날짜에는 아직 기록이 없어요.<br>위 입력창에서 첫 생각을 남겨보세요.</div>';}
-  items.sort((a,b)=>b.created-a.created).forEach(rec=>{
-    const el=$('#noteTemplate').content.firstElementChild.cloneNode(true);
-    const labels={note:'NOTE',checklist:'CHECKLIST',mindmap:'MIND MAP'};
-    el.querySelector('.kind-badge').textContent=labels[rec.type]||'NOTE';
-    el.querySelector('.note-title').textContent=rec.title;
-    const body=el.querySelector('.note-body');
-    if(rec.type==='checklist'){
-      (rec.items||[]).forEach((item,idx)=>{
-        const row=document.createElement('label'); row.className='check-row';
-        row.innerHTML=`<input type="checkbox" ${item.done?'checked':''}><span>${esc(item.text)}</span>`;
-        row.querySelector('input').onchange=e=>{rec.items[idx].done=e.target.checked;save()}; body.appendChild(row);
-      });
-    } else if(rec.type==='mindmap'){
-      const mm=document.createElement('div'); mm.className='mindmap';
-      const root=rec.nodes?.[0]||rec.title; const children=(rec.nodes||[]).slice(1);
-      mm.innerHTML=`<span class="mind-root">${esc(root)}</span><div class="mind-branch">${children.map(x=>`<span class="mind-child">${esc(x)}</span>`).join('')}</div>`; body.appendChild(mm);
-    } else body.textContent=rec.body;
-    const tags=el.querySelector('.note-tags'); (rec.tags||[]).forEach(t=>{const s=document.createElement('span');s.textContent='#'+t;tags.appendChild(s)});
-    el.querySelector('time').textContent=new Date(rec.created).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-    el.querySelector('.delete-btn').onclick=()=>{records=records.filter(r=>r.id!==rec.id);save()};
-    list.appendChild(el);
-  });
-  renderInsights(items);
-}
-
-function keywords(text){
-  const stop=new Set(['그리고','하지만','그래서','하는','있는','해야','하면','같다','정도','오늘','내일','다음주','메모','생각','정리']);
-  const words=(text.match(/[가-힣A-Za-z0-9]{2,}/g)||[]).filter(w=>!stop.has(w));
-  const score={}; words.forEach(w=>score[w]=(score[w]||0)+1);
-  return Object.entries(score).sort((a,b)=>b[1]-a[1]).slice(0,4).map(x=>x[0]);
-}
-function titleFrom(text){ const first=text.split(/[\n.!?]/).map(s=>s.trim()).find(Boolean)||'새 기록'; return first.length>24?first.slice(0,24)+'…':first; }
-function lines(text){ return text.split(/\n|,| 그리고 | 해야되고 | 해야 하고 | 해야함 | 해야 함 /).map(x=>x.trim()).filter(Boolean); }
-function buildRecord(text,type){
-  const tags=keywords(text); const base={id:crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()),date:fmtKey(selected),type,title:titleFrom(text),tags,created:Date.now()};
-  if(type==='checklist') base.items=lines(text).map(x=>({text:x.replace(/^[-•☐☑]\s*/,''),done:false}));
-  else if(type==='mindmap') base.nodes=[titleFrom(text),...tags,...lines(text).slice(1,5)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,6);
-  else base.body=text;
-  return base;
-}
-function organizeText(text){
-  const ks=keywords(text); const ls=lines(text); const title=titleFrom(text);
-  const todos=ls.filter(x=>/(해야|예약|작성|찾|준비|구매|모집|선정|확인|연락)/.test(x)).slice(0,5);
-  return {title,ks,todos,summary:ls.slice(0,3).join(' · ')};
-}
-function renderInsights(items){
-  const checks=items.filter(r=>r.type==='checklist').flatMap(r=>r.items||[]); const done=checks.filter(x=>x.done).length;
-  const pct=checks.length?Math.round(done/checks.length*100):0; $('#flowScore').textContent=pct+'%'; $('#flowBar').style.width=pct+'%';
-  $('#flowText').textContent=checks.length?`${checks.length}개의 할 일 중 ${done}개를 완료했어요.`:'체크리스트를 만들면 오늘의 흐름을 보여드려요.';
-  const all=[...new Set(items.flatMap(r=>r.tags||[]))].slice(0,6); $('#keywordChips').innerHTML=(all.length?all:['dayline','timeline']).map(x=>`<span>#${esc(x)}</span>`).join('');
-}
-function renderAll(){renderTimeline();renderNotes();}
-
-$('#typeSwitch').addEventListener('click',e=>{if(!e.target.dataset.type)return; captureType=e.target.dataset.type; document.querySelectorAll('.type').forEach(b=>b.classList.toggle('active',b===e.target));});
-$('#saveBtn').onclick=()=>{const t=$('#quickText').value.trim(); if(!t)return; records.push(buildRecord(t,captureType)); $('#quickText').value=''; save();};
-$('#organizeBtn').onclick=()=>{const ta=$('#quickText'); const t=ta.value.trim(); if(!t)return; const o=organizeText(t); const block=`${o.title}\n\n핵심: ${o.summary}${o.todos.length?'\n\n할 일:\n'+o.todos.map(x=>'☐ '+x).join('\n'):''}${o.ks.length?'\n\n#'+o.ks.join(' #'):''}`; ta.value=block; captureType=o.todos.length?'checklist':'note'; document.querySelectorAll('.type').forEach(b=>b.classList.toggle('active',b.dataset.type===captureType));};
-$('#todayBtn').onclick=()=>{selected=new Date();selected.setHours(0,0,0,0);renderAll();};
-$('#newBtn').onclick=()=>{$('#quickText').focus();};
-$('#prevWeek').onclick=()=>{selected.setDate(selected.getDate()-7);renderAll();}; $('#nextWeek').onclick=()=>{selected.setDate(selected.getDate()+7);renderAll();};
-
-if(!records.length){
-  const k=fmtKey(selected); records=[
-    {id:'sample1',date:k,type:'note',title:'Dayline에 오신 것을 환영해요',body:'떠오르는 생각을 날짜 위에 바로 남겨보세요. 기록은 이 기기에 자동 저장됩니다.',tags:['시작','기록'],created:Date.now()-3000},
-    {id:'sample2',date:k,type:'checklist',title:'오늘의 작은 계획',items:[{text:'첫 메모 남기기',done:false},{text:'타임라인 둘러보기',done:false},{text:'마인드맵 만들어보기',done:false}],tags:['오늘','계획'],created:Date.now()-2000},
-    {id:'sample3',date:k,type:'mindmap',title:'나의 아이디어',nodes:['새 프로젝트','아이디어','사람','일정','다음 행동'],tags:['아이디어'],created:Date.now()-1000}
-  ]; localStorage.setItem(storageKey,JSON.stringify(records));
-}
-renderAll();
-if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const recordsKey='dayline.records.v1', tutorialKey='dayline.tutorialSeen.v2';
+let records=JSON.parse(localStorage.getItem(recordsKey)||'[]'), selected=strip(new Date()), calCursor=new Date(selected.getFullYear(),selected.getMonth(),1), type='note', tutorialIndex=0;
+const DOW=['일요일','월요일','화요일','수요일','목요일','금요일','토요일'], SD=['일','월','화','수','목','금','토'];
+function strip(d){return new Date(d.getFullYear(),d.getMonth(),d.getDate())} function key(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`} function month(d){return `${d.getFullYear()}년 ${d.getMonth()+1}월`} function label(d){return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`} function esc(s=''){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))} function today(){return strip(new Date())}
+function save(){localStorage.setItem(recordsKey,JSON.stringify(records));renderAll()} function items(){return records.filter(r=>r.date===key(selected)).sort((a,b)=>b.created-a.created)}
+function open(id){$('#'+id).hidden=false} function close(id){$('#'+id).hidden=true}
+function renderTimeline(){const el=$('#timeline');el.innerHTML='';const start=strip(selected);start.setDate(start.getDate()-14);const tk=key(today());for(let i=0;i<29;i++){const d=strip(start);d.setDate(start.getDate()+i);const k=key(d),count=records.filter(r=>r.date===k).length,n=document.createElement('button');n.className='day'+(k===key(selected)?' active':'')+(k===tk?' today':'');n.innerHTML=`<span class="dow">${SD[d.getDay()]}</span><span class="dot"></span><span class="num">${d.getDate()}</span><span class="count">${count?count+' records':''}</span>`;n.onclick=()=>{selected=d;calCursor=new Date(d.getFullYear(),d.getMonth(),1);renderAll()};el.appendChild(n)}$('#monthTitle').textContent=month(selected);setTimeout(()=>$('.day.active')?.scrollIntoView({inline:'center',block:'nearest'}),0)}
+function renderNotes(){const list=$('#notes');const data=items();$('#selectedWeekday').textContent=DOW[selected.getDay()];$('#selectedDate').textContent=label(selected);$('#noteCount').textContent=`${data.length} record${data.length===1?'':'s'}`;list.innerHTML='';if(!data.length)list.innerHTML='<div class="empty">이 날짜에는 아직 기록이 없어요.<br>첫 기록을 남겨보세요.</div>';data.forEach(r=>{const n=$('#noteTemplate').content.firstElementChild.cloneNode(true);n.querySelector('.badge').textContent={note:'NOTE',checklist:'CHECKLIST',mindmap:'MIND MAP'}[r.type]||'NOTE';n.querySelector('h3').textContent=r.title;const body=n.querySelector('.note-body');if(r.type==='checklist'){(r.items||[]).forEach((it,i)=>{const row=document.createElement('label');row.className='check';row.innerHTML=`<input type="checkbox" ${it.done?'checked':''}><span>${esc(it.text)}</span>`;row.querySelector('input').onchange=e=>{r.items[i].done=e.target.checked;save()};body.appendChild(row)})}else if(r.type==='mindmap'){const root=(r.nodes||[])[0]||r.title,children=(r.nodes||[]).slice(1);body.innerHTML=`<span class="mind-root">${esc(root)}</span><div class="mind-children">${children.map(x=>`<span class="mind-child">${esc(x)}</span>`).join('')}</div>`}else body.textContent=r.body||'';(r.tags||[]).forEach(t=>{const s=document.createElement('span');s.textContent='#'+t;n.querySelector('.note-tags').appendChild(s)});n.querySelector('time').textContent=new Date(r.created).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});n.querySelector('.delete').onclick=()=>{records=records.filter(x=>x.id!==r.id);save()};list.appendChild(n)});renderInsights(data)}
+function words(text){const stop=new Set(['그리고','하지만','그래서','오늘','메모','생각','정리','기록','하는','있는','해야']);const arr=(text.match(/[가-힣A-Za-z0-9]{2,}/g)||[]).filter(w=>!stop.has(w)),score={};arr.forEach(w=>score[w]=(score[w]||0)+1);return Object.entries(score).sort((a,b)=>b[1]-a[1]).slice(0,4).map(x=>x[0])} function title(text){const f=text.split(/[\n.!?]/).map(x=>x.trim()).find(Boolean)||'새 기록';return f.length>24?f.slice(0,24)+'…':f} function lines(text){return text.split(/\n|,| 그리고 | 해야되고 | 해야 하고 | 해야함 | 해야 함 /).map(x=>x.trim()).filter(Boolean)} function build(text){const base={id:(crypto.randomUUID?.()||String(Date.now()+Math.random())),date:key(selected),created:Date.now(),type,title:title(text),tags:words(text)};if(type==='checklist')return {...base,items:lines(text).map(x=>({text:x.replace(/^[-•☐☑]\s*/,''),done:false}))};if(type==='mindmap')return {...base,nodes:[title(text),...words(text),...lines(text).slice(1,4)].filter((x,i,a)=>a.indexOf(x)===i).slice(0,7)};return {...base,body:text}}
+function renderInsights(data){const all=data.filter(x=>x.type==='checklist').flatMap(x=>x.items||[]),done=all.filter(x=>x.done).length,p=all.length?Math.round(done/all.length*100):0;$('#flowScore').textContent=p+'%';$('#flowBar').style.width=p+'%';$('#flowText').textContent=all.length?`${all.length}개 중 ${done}개 완료`:'체크리스트를 만들면 오늘의 흐름을 보여드려요.';const ks=[...new Set(data.flatMap(x=>x.tags||[]))].slice(0,6);$('#keywordChips').innerHTML=(ks.length?ks:['dayline','timeline']).map(x=>`<span>#${esc(x)}</span>`).join('')}
+function renderCalendar(){const grid=$('#calendar');$('#calendarTitle').textContent=month(calCursor);if(!$('#weekdays').children.length)$('#weekdays').innerHTML=SD.map(x=>`<div>${x}</div>`).join('');grid.innerHTML='';const y=calCursor.getFullYear(),m=calCursor.getMonth(),first=new Date(y,m,1),start=new Date(y,m,1-first.getDay()),tk=key(today());for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const k=key(d),count=records.filter(r=>r.date===k).length,b=document.createElement('button');b.className='cal-day'+(d.getMonth()!==m?' out':'')+(k===tk?' today':'')+(k===key(selected)?' active':'');b.innerHTML=`<b>${d.getDate()}</b><small>${count?count+'개 기록':'&nbsp;'}</small>`;b.onclick=()=>{selected=strip(d);calCursor=new Date(d.getFullYear(),d.getMonth(),1);close('calendarModal');renderAll()};grid.appendChild(b)}} function showCalendar(){renderCalendar();open('calendarModal')}
+const slides=[
+ {t:'Dayline에 오신 걸 환영해요',p:'Dayline은 날짜 중심으로 메모를 쌓는 앱이에요. 떠오르는 생각, 할 일, 아이디어를 시간 위에 기록하세요.',v:'<div class="visual-title">시간 위에 생각을 놓다</div><div class="visual-row"><span class="visual-chip">메모</span><span class="visual-chip">체크리스트</span><span class="visual-chip">마인드맵</span></div>'},
+ {t:'타임라인과 캘린더로 이동해요',p:'상단 타임라인을 좌우로 살피거나 캘린더에서 날짜를 선택하면 그 날짜의 기록을 바로 볼 수 있어요.',v:'<div class="visual-list"><div class="visual-item">← → 타임라인 이동</div><div class="visual-item">캘린더에서 날짜 선택</div><div class="visual-item">기록이 있는 날짜에는 개수 표시</div></div>'},
+ {t:'3가지 방식으로 기록해요',p:'일반 메모, 체크리스트, 마인드맵을 지원해요. 자동 정리를 누르면 입력한 내용을 보기 쉽게 정리해 줍니다.',v:'<div class="visual-row"><span class="visual-chip">메모</span><span class="visual-chip">☑ 체크리스트</span><span class="visual-chip">◎ 마인드맵</span></div><div class="visual-item">✨ 자동 정리</div>'},
+ {t:'설정에서 언제든 다시 볼 수 있어요',p:'오른쪽 위 설정 버튼을 누르면 튜토리얼 다시 보기, 캘린더 열기, 오늘로 이동을 사용할 수 있어요.',v:'<div class="visual-list"><div class="visual-item">⚙ 튜토리얼 다시 보기</div><div class="visual-item">⚙ 캘린더 열기</div><div class="visual-item">⚙ 오늘로 이동</div></div>'}
+];
+function renderTutorial(){const s=slides[tutorialIndex];$('#tutorialTitle').textContent=s.t;$('#tutorialText').textContent=s.p;$('#tutorialVisual').innerHTML=s.v;$('#tutorialDots').innerHTML=slides.map((_,i)=>`<i class="${i===tutorialIndex?'active':''}"></i>`).join('');$('#tutorialPrev').disabled=tutorialIndex===0;$('#tutorialPrev').style.opacity=tutorialIndex===0?'.4':'1';$('#tutorialNext').textContent=tutorialIndex===slides.length-1?'시작하기':'다음'} function tutorial(){tutorialIndex=0;renderTutorial();open('tutorialModal')} function finishTutorial(){localStorage.setItem(tutorialKey,'1');close('tutorialModal')}
+function renderAll(){renderTimeline();renderNotes();renderCalendar()}
+$('#prevWeek').onclick=()=>{selected.setDate(selected.getDate()-7);calCursor=new Date(selected.getFullYear(),selected.getMonth(),1);renderAll()};$('#nextWeek').onclick=()=>{selected.setDate(selected.getDate()+7);calCursor=new Date(selected.getFullYear(),selected.getMonth(),1);renderAll()};$('#calendarBtn').onclick=showCalendar;$('#datePickBtn').onclick=showCalendar;$('#settingsBtn').onclick=()=>open('settingsModal');$('#settingsCalendar').onclick=()=>{close('settingsModal');showCalendar()};$('#goToday').onclick=()=>{close('settingsModal');selected=today();calCursor=new Date(selected.getFullYear(),selected.getMonth(),1);renderAll()};$('#replayTutorial').onclick=()=>{close('settingsModal');tutorial()};$('#calPrev').onclick=()=>{calCursor=new Date(calCursor.getFullYear(),calCursor.getMonth()-1,1);renderCalendar()};$('#calNext').onclick=()=>{calCursor=new Date(calCursor.getFullYear(),calCursor.getMonth()+1,1);renderCalendar()};$('#calToday').onclick=()=>{selected=today();calCursor=new Date(selected.getFullYear(),selected.getMonth(),1);close('calendarModal');renderAll()};$('#newBtn').onclick=()=>{$('#quickText').focus();$('#quickText').scrollIntoView({behavior:'smooth',block:'center'})};$('#organizeBtn').onclick=()=>{const t=$('#quickText').value.trim();if(!t)return;const ls=lines(t),ks=words(t);$('#quickText').value=`${title(t)}\n\n${ls.map(x=>'• '+x).join('\n')}${ks.length?'\n\n#'+ks.join(' #'):''}`};$('#saveBtn').onclick=()=>{const t=$('#quickText').value.trim();if(!t)return alert('기록할 내용을 입력해 주세요.');records.push(build(t));$('#quickText').value='';save()};$$('#typeTabs button').forEach(b=>b.onclick=()=>{$$('#typeTabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');type=b.dataset.type});$$('[data-close]').forEach(b=>b.onclick=()=>close(b.dataset.close));$$('.overlay').forEach(o=>o.onclick=e=>{if(e.target===o)o.hidden=true});$('#tutorialPrev').onclick=()=>{if(tutorialIndex){tutorialIndex--;renderTutorial()}};$('#tutorialNext').onclick=()=>{if(tutorialIndex<slides.length-1){tutorialIndex++;renderTutorial()}else finishTutorial()};$('#tutorialSkip').onclick=finishTutorial;$('#tutorialClose').onclick=finishTutorial;
+if(!records.length){const k=key(today());records=[{id:'s1',date:k,created:Date.now()-3000,type:'note',title:'Dayline에 오신 것을 환영해요',body:'날짜 위에 생각을 남겨보세요.',tags:['시작']},{id:'s2',date:k,created:Date.now()-2000,type:'checklist',title:'오늘의 작은 계획',items:[{text:'첫 메모 남기기',done:false},{text:'캘린더 둘러보기',done:false}],tags:['오늘']},{id:'s3',date:k,created:Date.now()-1000,type:'mindmap',title:'나의 아이디어',nodes:['새 프로젝트','아이디어','다음 행동'],tags:['아이디어']}];localStorage.setItem(recordsKey,JSON.stringify(records))}renderAll();if(!localStorage.getItem(tutorialKey))setTimeout(tutorial,250);
